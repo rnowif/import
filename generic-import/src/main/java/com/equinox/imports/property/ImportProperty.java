@@ -1,5 +1,6 @@
 package com.equinox.imports.property;
 
+import com.equinox.imports.ImportPropertyGenerator;
 import com.equinox.imports.file.ImportFile;
 import com.equinox.imports.transformer.ImportPropertyTransformer;
 
@@ -12,11 +13,13 @@ public class ImportProperty {
 	private final Integer length;
 	private final Boolean notNull;
 	private final ImportPropertyTransformer transformer;
+	private final ImportPropertyGenerator generator;
 	private final String defaultValue;
 	private final Boolean multiple;
 
 	public ImportProperty(ImportFile file, String name, String columnIndex, Class<?> type, Integer length,
-			Boolean notNull, String defaultValue, ImportPropertyTransformer transformer, Boolean multiple) {
+			Boolean notNull, String defaultValue, Boolean multiple, ImportPropertyTransformer transformer,
+			ImportPropertyGenerator generator) {
 		this.file = file;
 		this.type = type;
 		this.name = name;
@@ -24,6 +27,7 @@ public class ImportProperty {
 		this.length = length;
 		this.notNull = notNull;
 		this.transformer = transformer;
+		this.generator = generator;
 		this.defaultValue = defaultValue;
 		this.multiple = multiple;
 	}
@@ -50,6 +54,10 @@ public class ImportProperty {
 
 	public ImportPropertyTransformer getTransformer() {
 		return transformer;
+	}
+
+	public ImportPropertyGenerator getGenerator() {
+		return generator;
 	}
 
 	public String getDefaultValue() {

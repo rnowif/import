@@ -37,7 +37,7 @@ public class ImportLine {
 		ImportLineColumn column = columns.get(key.getColumnIndex());
 
 		try {
-			return getValue(clazz, column.getValue(), key.getTransformer());
+			return getValue(clazz, column.getValue(), key.getTransformer(), null);
 		} catch (NumberFormatException e) {
 			return null;
 		} catch (ImportException e) {
@@ -84,9 +84,9 @@ public class ImportLine {
 		T value = null;
 
 		try {
-			value = getValue(type, stringValue, property.getTransformer());
+			value = getValue(type, stringValue, property.getTransformer(), property.getGenerator());
 		} catch (NumberFormatException | ClassCastException e) {
-			throw new InvalidFormatPropertyImportException(this, property, column.getValue());
+			throw new InvalidFormatPropertyImportException(this, property, stringValue);
 		} catch (ImportException e) {
 			throw new ImportLineException(this, e.getMessage());
 		}
@@ -102,14 +102,20 @@ public class ImportLine {
 		return value;
 	}
 
-	private <T> T getValue(Class<T> type, String stringValue, ImportPropertyTransformer transformer)
-			throws ImportException {
+	private <T> T getValue(Class<T> type, String stringValue, ImportPropertyTransformer transformer,
+			ImportPropertyGenerator generator) throws ImportException {
 
-		if (StringUtils.isEmpty(stringValue)) {
+		if (StringUtils.isEmpty(stringValue) && generator == null) {
 			return null;
 		}
 
-		T value = type.cast(transformer.transformProperty(stringValue));
+		T value = null;
+
+		if (generator != null) {
+			value = type.cast(generator.generate());
+		} else {
+			value = type.cast(transformer.transformProperty(stringValue));
+		}
 
 		if (value != null && StringUtils.isEmpty(value.toString())) {
 			return null;

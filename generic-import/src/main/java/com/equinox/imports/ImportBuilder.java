@@ -28,6 +28,7 @@ public class ImportBuilder {
 	public static Importer buildFrom(Element element) {
 
 		try {
+
 			NodeList classNodes = element.getElementsByTagName("class");
 			if (classNodes == null) {
 				throw new IllegalArgumentException("Element class obligatoire");
@@ -40,80 +41,7 @@ public class ImportBuilder {
 				// Lecture de la classe
 				Element classElement = (Element) classNodes.item(i);
 
-				Class<?> clazz = readClass(classElement, "name", null);
-				ClassImporter classImporter = new ClassImporter(clazz);
-
-				// Lecture des fichiers
-				NodeList fileNodes = classElement.getElementsByTagName("file");
-				if (fileNodes == null) {
-					throw new IllegalArgumentException("Element file obligatoire");
-				}
-
-				Map<String, ImportFile> files = new HashMap<String, ImportFile>();
-
-				// On ne lit que le premier élément file
-				Element fileNode = (Element) fileNodes.item(0);
-
-				ImportFile root = readFile(fileNode, files, null);
-
-				classImporter.setRootFile(root);
-
-				// Lecture des propriétés
-				NodeList propertyNodes = classElement.getElementsByTagName("property");
-				if (propertyNodes != null) {
-					for (int j = 0; j < propertyNodes.getLength(); j++) {
-						Element propertyNode = (Element) propertyNodes.item(j);
-
-						String refId = propertyNode.getAttribute("file-ref");
-
-						String name = propertyNode.getAttribute("name");
-						String columnIndex = propertyNode.getAttribute("column");
-
-						// Lecture du type (String par défaut)
-						Class<?> type = readClass(propertyNode, "type", String.class);
-
-						ImportPropertyTransformer transformer = null;
-						if (String.class.equals(type)) {
-							transformer = new NopPropertyTransformer();
-						} else if (Long.class.equals(type)) {
-							transformer = new LongPropertyTransformer();
-						} else if (Integer.class.equals(type)) {
-							transformer = new IntegerPropertyTransformer();
-						} else if (Double.class.equals(type)) {
-							transformer = new DoublePropertyTransformer();
-						} else if (Boolean.class.equals(type)) {
-							transformer = new BooleanPropertyTransformer();
-						}
-
-						// Lecture de la classe de transformation
-						String transformClassString = propertyNode.getAttribute("transform-class");
-						if (StringUtils.isNotEmpty(transformClassString)) {
-							transformer = Class.forName(transformClassString)
-									.asSubclass(ImportPropertyTransformer.class).newInstance();
-						}
-
-						if (transformer == null) {
-							throw new IllegalArgumentException("Aucun transformer défini pour le type "
-									+ type.getSimpleName());
-						}
-
-						Integer length = readInteger(propertyNode, "length", null);
-						Boolean notNull = readBoolean(propertyNode, "not-null", false);
-						Boolean multiple = readBoolean(propertyNode, "multiple", false);
-						String defaultValue = propertyNode.getAttribute("default-value");
-
-						ImportFile joinFile = files.get(refId);
-						if (joinFile == null) {
-							throw new IllegalArgumentException("Fichier introuvable : " + refId);
-						}
-
-						ImportProperty property = new ImportProperty(joinFile, name, columnIndex, type, length,
-								notNull, defaultValue, transformer, multiple);
-
-						classImporter.addProperty(property);
-					}
-				}
-
+				ClassImporter classImporter = readClassImporter(classElement);
 				importer.addClassImporter(classImporter);
 			}
 
@@ -123,14 +51,38 @@ public class ImportBuilder {
 		}
 	}
 
-	private static Class<?> readClass(Element node, String name, Class<?> defaultClass) throws ClassNotFoundException {
-		String typeString = node.getAttribute(name);
-		Class<?> type = defaultClass;
-		if (StringUtils.isNotEmpty(typeString)) {
-			type = Class.forName(typeString);
+	private static ClassImporter readClassImporter(Element classElement) throws InstantiationException,
+			IllegalAccessException, ClassNotFoundException {
+
+		Class<?> clazz = readClass(classElement, "name", null);
+		ClassImporter classImporter = new ClassImporter(clazz);
+
+		// Lecture des fichiers
+		NodeList fileNodes = classElement.getElementsByTagName("file");
+		if (fileNodes == null) {
+			throw new IllegalArgumentException("Element file obligatoire");
 		}
 
-		return type;
+		Map<String, ImportFile> files = new HashMap<String, ImportFile>();
+
+		// On ne lit que le premier élément file
+		Element fileNode = (Element) fileNodes.item(0);
+
+		ImportFile root = readFile(fileNode, files, null);
+		classImporter.setRootFile(root);
+
+		// Lecture des propriétés
+		NodeList propertyNodes = classElement.getElementsByTagName("property");
+		if (propertyNodes != null) {
+			for (int i = 0; i < propertyNodes.getLength(); i++) {
+				Element propertyNode = (Element) propertyNodes.item(i);
+
+				ImportProperty property = readProperty(propertyNode, files);
+				classImporter.addProperty(property);
+			}
+		}
+
+		return classImporter;
 	}
 
 	private static ImportFile readFile(Element fileNode, Map<String, ImportFile> files, ImportFile parent)
@@ -169,52 +121,13 @@ public class ImportBuilder {
 			for (int i = 0; i < keyNodes.getLength(); i++) {
 				Element keyNode = (Element) keyNodes.item(i);
 
-				String keyId = keyNode.getAttribute("id");
-				String keyColumnIndex = keyNode.getAttribute("column");
-
-				// Lecture du type (String par défaut)
-				Class<?> keyType = readClass(keyNode, "type", String.class);
-
-				ImportPropertyTransformer transformer = null;
-				if (String.class.equals(keyType)) {
-					transformer = new NopPropertyTransformer();
-				} else if (Long.class.equals(keyType)) {
-					transformer = new LongPropertyTransformer();
-				} else if (Integer.class.equals(keyType)) {
-					transformer = new IntegerPropertyTransformer();
-				} else if (Double.class.equals(keyType)) {
-					transformer = new DoublePropertyTransformer();
-				} else if (Boolean.class.equals(keyType)) {
-					transformer = new BooleanPropertyTransformer();
-				}
-
-				// Lecture de la classe de transformation
-				String transformClassString = keyNode.getAttribute("transform-class");
-				if (StringUtils.isNotEmpty(transformClassString)) {
-					transformer = Class.forName(transformClassString).asSubclass(ImportPropertyTransformer.class)
-							.newInstance();
-				}
-
-				if (transformer == null) {
-					throw new IllegalArgumentException("Aucun transformer défini pour le type "
-							+ keyType.getSimpleName());
-				}
-
-				ImportKey key = new ImportKey(keyId, keyType, keyColumnIndex, transformer);
-
+				ImportKey key = readKey(keyNode);
 				file.addKey(key);
 
 				// Si parent n'est pas nul, on cherche key-ref et la clé associée dans le parent.
 				if (parent != null) {
-					String keyRefId = keyNode.getAttribute("key-ref");
-					ImportKey keyRef = parent.getKey(keyRefId);
 
-					if (keyRef == null) {
-						throw new IllegalArgumentException("Impossible de trouver la clé de jointure : " + keyRefId);
-					}
-
-					ImportFileJoin joint = new ImportFileJoin(file, key, keyRef);
-
+					ImportFileJoin joint = readJoin(keyNode, parent, file, key);
 					parent.addJoin(joint);
 				}
 			}
@@ -230,6 +143,115 @@ public class ImportBuilder {
 		}
 
 		return file;
+	}
+
+	private static ImportKey readKey(Element keyNode) throws InstantiationException, IllegalAccessException,
+			ClassNotFoundException {
+		String keyId = keyNode.getAttribute("id");
+		String keyColumnIndex = keyNode.getAttribute("column");
+
+		// Lecture du type (String par défaut)
+		Class<?> keyType = readClass(keyNode, "type", String.class);
+
+		ImportPropertyTransformer transformer = null;
+		if (String.class.equals(keyType)) {
+			transformer = new NopPropertyTransformer();
+		} else if (Long.class.equals(keyType)) {
+			transformer = new LongPropertyTransformer();
+		} else if (Integer.class.equals(keyType)) {
+			transformer = new IntegerPropertyTransformer();
+		} else if (Double.class.equals(keyType)) {
+			transformer = new DoublePropertyTransformer();
+		} else if (Boolean.class.equals(keyType)) {
+			transformer = new BooleanPropertyTransformer();
+		}
+
+		// Lecture de la classe de transformation
+		String transformClassString = keyNode.getAttribute("transform-class");
+		if (StringUtils.isNotEmpty(transformClassString)) {
+			transformer = Class.forName(transformClassString).asSubclass(ImportPropertyTransformer.class).newInstance();
+		}
+
+		if (transformer == null) {
+			throw new IllegalArgumentException("Aucun transformer défini pour le type " + keyType.getSimpleName());
+		}
+
+		return new ImportKey(keyId, keyType, keyColumnIndex, transformer);
+	}
+
+	private static ImportFileJoin readJoin(Element keyNode, ImportFile parent, ImportFile file, ImportKey key) {
+		String keyRefId = keyNode.getAttribute("key-ref");
+		ImportKey keyRef = parent.getKey(keyRefId);
+
+		if (keyRef == null) {
+			throw new IllegalArgumentException("Impossible de trouver la clé de jointure : " + keyRefId);
+		}
+
+		return new ImportFileJoin(file, key, keyRef);
+	}
+
+	private static ImportProperty readProperty(Element propertyNode, Map<String, ImportFile> files)
+			throws ClassNotFoundException, InstantiationException, IllegalAccessException {
+		String refId = propertyNode.getAttribute("file-ref");
+
+		String name = propertyNode.getAttribute("name");
+		String columnIndex = propertyNode.getAttribute("column");
+
+		// Lecture du type (String par défaut)
+		Class<?> type = readClass(propertyNode, "type", String.class);
+
+		ImportPropertyTransformer transformer = null;
+		if (String.class.equals(type)) {
+			transformer = new NopPropertyTransformer();
+		} else if (Long.class.equals(type)) {
+			transformer = new LongPropertyTransformer();
+		} else if (Integer.class.equals(type)) {
+			transformer = new IntegerPropertyTransformer();
+		} else if (Double.class.equals(type)) {
+			transformer = new DoublePropertyTransformer();
+		} else if (Boolean.class.equals(type)) {
+			transformer = new BooleanPropertyTransformer();
+		}
+
+		// Lecture de la classe de transformation
+		String transformClassString = propertyNode.getAttribute("transform-class");
+		if (StringUtils.isNotEmpty(transformClassString)) {
+			transformer = Class.forName(transformClassString).asSubclass(ImportPropertyTransformer.class).newInstance();
+		}
+
+		if (transformer == null) {
+			throw new IllegalArgumentException("Aucun transformer défini pour le type " + type.getSimpleName());
+		}
+
+		// Lecture de la classe de génération
+		ImportPropertyGenerator generator = null;
+		String generatorClassString = propertyNode.getAttribute("generator-class");
+		if (StringUtils.isNotEmpty(generatorClassString)) {
+			generator = Class.forName(generatorClassString).asSubclass(ImportPropertyGenerator.class).newInstance();
+		}
+
+		Integer length = readInteger(propertyNode, "length", null);
+		Boolean notNull = readBoolean(propertyNode, "not-null", false);
+		Boolean multiple = readBoolean(propertyNode, "multiple", false);
+		String defaultValue = propertyNode.getAttribute("default-value");
+
+		ImportFile joinFile = files.get(refId);
+		if (joinFile == null) {
+			throw new IllegalArgumentException("Fichier introuvable : " + refId);
+		}
+
+		return new ImportProperty(joinFile, name, columnIndex, type, length, notNull, defaultValue, multiple,
+				transformer, generator);
+	}
+
+	private static Class<?> readClass(Element node, String name, Class<?> defaultClass) throws ClassNotFoundException {
+		String typeString = node.getAttribute(name);
+		Class<?> type = defaultClass;
+		if (StringUtils.isNotEmpty(typeString)) {
+			type = Class.forName(typeString);
+		}
+
+		return type;
 	}
 
 	private static Boolean readBoolean(Element node, String name, Boolean defaultValue) {
