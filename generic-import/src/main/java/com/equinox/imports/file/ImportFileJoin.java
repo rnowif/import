@@ -24,12 +24,7 @@ public class ImportFileJoin {
 	}
 
 	public void joinLines(ImportLine line, List<ImportLine> joinLines) {
-		for (ImportLine joinLine : joinLines) {
-			if (line.getByKey(keyRef.getType(), keyRef) != null
-					&& line.getByKey(keyRef.getType(), keyRef).equals(joinLine.getByKey(joinKey.getType(), joinKey))) {
-				line.addJoinLine(joinLine);
-			}
-		}
+		line.join(joinLines, keyRef, joinKey);
 	}
 
 }

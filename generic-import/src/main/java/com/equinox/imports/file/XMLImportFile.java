@@ -3,6 +3,7 @@ package com.equinox.imports.file;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -93,21 +94,29 @@ public class XMLImportFile extends AbstractImportFile {
 		// ses enfants (c'est-à-dire ses sous-balises et son contenu)
 		else if (node.getNodeType() == Node.ELEMENT_NODE) {
 
+			String newTree = "";
+			if (StringUtils.isEmpty(tree)) {
+				newTree = node.getNodeName();
+			} else {
+				newTree = tree + "/" + node.getNodeName();
+			}
+
 			NamedNodeMap attributs = node.getAttributes();
 			for (int i = 0; i < attributs.getLength(); i++) {
 				Node attr = attributs.item(i);
-				parent.addColumn(tree + node.getNodeName() + "[" + attr.getNodeName() + "]", attr.getNodeValue());
+				parent.addColumn(newTree + "[" + attr.getNodeName() + "]", attr.getNodeValue());
 			}
 
 			NodeList children = node.getChildNodes();
 			for (int i = 0; i < children.getLength(); i++) {
 				Node child = children.item(i);
 				ImportLine subLine = new ImportLine(this, parent.getNumber());
-				processLine(child, subLine, tree + node.getNodeName() + "/");
+				processLine(child, subLine, newTree);
+				if (!subLine.isEmpty()) {
+					parent.join(newTree + "/" + child.getNodeName(), Arrays.asList(subLine));
+				}
 			}
-
 		}
-
 	}
 
 	private Document getDocument(String file) throws ParseFileImportException {

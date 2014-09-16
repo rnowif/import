@@ -1,75 +1,97 @@
 package com.equinox.imports.property;
 
-import com.equinox.imports.ImportPropertyGenerator;
+import com.equinox.imports.ImportLineColumn;
+import com.equinox.imports.exception.ImportPropertyException;
+import com.equinox.imports.exception.InvalidFormatPropertyImportException;
+import com.equinox.imports.exception.NullPropertyImportException;
+import com.equinox.imports.exception.TooLongPropertyImportException;
 import com.equinox.imports.file.ImportFile;
-import com.equinox.imports.transformer.ImportPropertyTransformer;
 
-public class ImportProperty {
+public class ImportProperty extends AbstractImportField {
 
-	private final ImportFile file;
-	private final Class<?> type;
-	private final String name;
-	private final String columnIndex;
-	private final Integer length;
-	private final Boolean notNull;
-	private final ImportPropertyTransformer transformer;
-	private final ImportPropertyGenerator generator;
-	private final String defaultValue;
-	private final Boolean multiple;
+	private ImportFile file;
+	private String name;
+	private Integer length;
+	private Boolean notNull;
+	private String defaultValue;
+	private Boolean multiple;
 
-	public ImportProperty(ImportFile file, String name, String columnIndex, Class<?> type, Integer length,
-			Boolean notNull, String defaultValue, Boolean multiple, ImportPropertyTransformer transformer,
-			ImportPropertyGenerator generator) {
-		this.file = file;
-		this.type = type;
-		this.name = name;
-		this.columnIndex = columnIndex;
-		this.length = length;
-		this.notNull = notNull;
-		this.transformer = transformer;
-		this.generator = generator;
-		this.defaultValue = defaultValue;
-		this.multiple = multiple;
-	}
-
-	public String getColumnIndex() {
-		return columnIndex;
+	public ImportProperty() {
 	}
 
 	public ImportFile getFile() {
 		return file;
 	}
 
+	public void setFile(ImportFile file) {
+		this.file = file;
+	}
+
 	public String getName() {
 		return name;
 	}
 
-	public boolean isNotNull() {
-		return notNull;
+	public void setName(String name) {
+		this.name = name;
 	}
 
 	public Integer getLength() {
 		return length;
 	}
 
-	public ImportPropertyTransformer getTransformer() {
-		return transformer;
+	public void setLength(Integer length) {
+		this.length = length;
 	}
 
-	public ImportPropertyGenerator getGenerator() {
-		return generator;
+	public Boolean isNotNull() {
+		return notNull;
+	}
+
+	public void setNotNull(Boolean notNull) {
+		this.notNull = notNull;
 	}
 
 	public String getDefaultValue() {
 		return defaultValue;
 	}
 
+	public void setDefaultValue(String defaultValue) {
+		this.defaultValue = defaultValue;
+	}
+
 	public Boolean isMultiple() {
 		return multiple;
 	}
 
-	public Class<?> getType() {
-		return type;
+	public void setMultiple(Boolean multiple) {
+		this.multiple = multiple;
 	}
 
+	@Override
+	public <T> T getValue(Class<T> type, ImportLineColumn column) throws ImportPropertyException {
+
+		String stringValue = this.defaultValue;
+
+		if (column != null) {
+			stringValue = column.getValue();
+		}
+
+		T value = null;
+
+		try {
+			value = getValue(type, stringValue);
+		} catch (NumberFormatException | ClassCastException e) {
+			throw new InvalidFormatPropertyImportException(this, stringValue);
+		}
+
+		if (value == null && this.notNull) {
+			throw new NullPropertyImportException(this);
+		}
+
+		if (value != null && this.length != null && value.toString().length() > this.length) {
+			throw new TooLongPropertyImportException(this, value.toString().length());
+		}
+
+		return value;
+	}
 }

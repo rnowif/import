@@ -1,35 +1,30 @@
 package com.equinox.imports.property;
 
-import com.equinox.imports.transformer.ImportPropertyTransformer;
+import com.equinox.imports.ImportLineColumn;
+import com.equinox.imports.exception.ImportPropertyException;
 
-public class ImportKey {
+public class ImportKey extends AbstractImportField {
 
-	private final String id;
-	private final Class<?> type;
-	private final String columnIndex;
-	private final ImportPropertyTransformer transformer;
+	private String id;
 
-	public ImportKey(String id, Class<?> type, String columnName, ImportPropertyTransformer transformer) {
-		this.id = id;
-		this.type = type;
-		this.columnIndex = columnName;
-		this.transformer = transformer;
+	public ImportKey() {
 	}
 
 	public String getId() {
 		return id;
 	}
 
-	public Class<?> getType() {
-		return type;
+	public void setId(String id) {
+		this.id = id;
 	}
 
-	public String getColumnIndex() {
-		return columnIndex;
-	}
-
-	public ImportPropertyTransformer getTransformer() {
-		return transformer;
+	@Override
+	public <T> T getValue(Class<T> type, ImportLineColumn column) throws ImportPropertyException {
+		try {
+			return getValue(type, column.getValue());
+		} catch (NumberFormatException e) {
+			return null;
+		}
 	}
 
 }

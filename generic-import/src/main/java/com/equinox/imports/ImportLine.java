@@ -1,170 +1,329 @@
 package com.equinox.imports;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.collections.keyvalue.MultiKey;
 
-import com.equinox.imports.exception.ImportException;
 import com.equinox.imports.exception.ImportLineException;
-import com.equinox.imports.exception.InvalidFormatPropertyImportException;
+import com.equinox.imports.exception.ImportPropertyException;
 import com.equinox.imports.exception.NullPropertyImportException;
-import com.equinox.imports.exception.TooLongPropertyImportException;
 import com.equinox.imports.file.ImportFile;
 import com.equinox.imports.property.ImportKey;
 import com.equinox.imports.property.ImportProperty;
-import com.equinox.imports.transformer.ImportPropertyTransformer;
+import com.equinox.imports.property.SubClassImportProperty;
 
 public class ImportLine {
 
 	private final ImportFile file;
 	private final Long number;
-	private final Map<String, ImportLineColumn> columns;
-	private final List<ImportLine> joinLines;
+	// Clé numéro 1 : file id, Clé numéro 2 : column index
+	private final Map<MultiKey, ImportLineColumn> columns;
+	private final Map<String, List<ImportLine>> joinLines;
+	private ImportLine parent;
 
 	public ImportLine(ImportFile file, Long number) {
 		this.file = file;
 		this.number = number;
-		this.columns = new HashMap<String, ImportLineColumn>();
-		this.joinLines = new ArrayList<ImportLine>();
-	}
-
-	public <T> T getByKey(Class<T> clazz, ImportKey key) {
-
-		ImportLineColumn column = columns.get(key.getColumnIndex());
-
-		try {
-			return getValue(clazz, column.getValue(), key.getTransformer(), null);
-		} catch (NumberFormatException e) {
-			return null;
-		} catch (ImportException e) {
-			return null;
-		}
-	}
-
-	public <T> T getByProperty(Class<T> type, ImportProperty property) throws ImportException {
-
-		ImportLineColumn column = getColumn(property.getFile(), property.getColumnIndex());
-
-		if (column == null && property.isNotNull()) {
-			throw new ImportLineException(this, "La colonne " + property.getColumnIndex() + " n'existe pas");
-		}
-
-		return getByColumn(column, type, property);
-	}
-
-	public <T> List<T> getMultipleByProperty(Class<T> type, ImportProperty property) throws ImportException {
-
-		List<T> toReturn = new ArrayList<T>();
-
-		List<ImportLineColumn> columns = getColumns(property.getFile(), property.getColumnIndex());
-
-		if (CollectionUtils.isEmpty(columns) && property.isNotNull()) {
-			throw new ImportLineException(this, "La colonne " + property.getColumnIndex() + " n'existe pas");
-		}
-
-		for (ImportLineColumn column : columns) {
-			toReturn.add(getByColumn(column, type, property));
-		}
-
-		return toReturn;
-	}
-
-	private <T> T getByColumn(ImportLineColumn column, Class<T> type, ImportProperty property) throws ImportException {
-
-		String stringValue = property.getDefaultValue();
-
-		if (column != null) {
-			stringValue = column.getValue();
-		}
-
-		T value = null;
-
-		try {
-			value = getValue(type, stringValue, property.getTransformer(), property.getGenerator());
-		} catch (NumberFormatException | ClassCastException e) {
-			throw new InvalidFormatPropertyImportException(this, property, stringValue);
-		} catch (ImportException e) {
-			throw new ImportLineException(this, e.getMessage());
-		}
-
-		if (value == null && property.isNotNull()) {
-			throw new NullPropertyImportException(this, property);
-		}
-
-		if (value != null && property.getLength() != null && value.toString().length() > property.getLength()) {
-			throw new TooLongPropertyImportException(this, property, value.toString().length());
-		}
-
-		return value;
-	}
-
-	private <T> T getValue(Class<T> type, String stringValue, ImportPropertyTransformer transformer,
-			ImportPropertyGenerator generator) throws ImportException {
-
-		if (StringUtils.isEmpty(stringValue) && generator == null) {
-			return null;
-		}
-
-		T value = null;
-
-		if (generator != null) {
-			value = type.cast(generator.generate());
-		} else {
-			value = type.cast(transformer.transformProperty(stringValue));
-		}
-
-		if (value != null && StringUtils.isEmpty(value.toString())) {
-			return null;
-		}
-
-		return value;
-	}
-
-	private ImportLineColumn getColumn(ImportFile fileToSearch, String index) {
-
-		if (this.file.getId().equals(fileToSearch.getId())) {
-			return columns.get(index);
-		}
-
-		for (ImportLine joinLine : joinLines) {
-			return joinLine.getColumn(fileToSearch, index);
-		}
-
-		return null;
-	}
-
-	private List<ImportLineColumn> getColumns(ImportFile fileToSearch, String index) {
-
-		List<ImportLineColumn> toReturn = new ArrayList<ImportLineColumn>();
-
-		if (this.file.getId().equals(fileToSearch.getId())) {
-			ImportLineColumn column = columns.get(index);
-			if (column != null) {
-				toReturn.add(column);
-			}
-		}
-
-		for (ImportLine joinLine : joinLines) {
-			toReturn.addAll(joinLine.getColumns(fileToSearch, index));
-		}
-
-		return toReturn;
-	}
-
-	public void addJoinLine(ImportLine joinLine) {
-		joinLines.add(joinLine);
+		this.columns = new HashMap<MultiKey, ImportLineColumn>();
+		this.joinLines = new HashMap<String, List<ImportLine>>();
 	}
 
 	public void addColumn(String columnIndex, String value) {
-		this.columns.put(columnIndex, new ImportLineColumn(value));
+		MultiKey key = new MultiKey(this.file.getId(), columnIndex);
+		this.columns.put(key, new ImportLineColumn(this.file, columnIndex, value));
 	}
 
 	public Long getNumber() {
 		return number;
 	}
 
+	public ImportLine getParent() {
+		return parent;
+	}
+
+	private void setParent(ImportLine parent) {
+		this.parent = parent;
+	}
+
+	public String getStringValueByColumn(String columnIndex) {
+		ImportLineColumn column = getFirstColumn(this.file, columnIndex);
+
+		if (column == null) {
+			return null;
+		}
+
+		return column.getValue();
+	}
+
+	private Object getByKey(ImportKey key) {
+
+		ImportLineColumn column = getFirstColumn(this.file, key.getColumnIndex());
+
+		if (column == null) {
+			return null;
+		}
+
+		try {
+			return key.getValue(key.getType(), column);
+		} catch (ImportPropertyException e) {
+			return null;
+		}
+	}
+
+	private ImportLineColumn getFirstColumn(ImportFile fileToSearch, String index) {
+		List<ImportLineColumn> columns = getColumns(fileToSearch, index);
+
+		if (CollectionUtils.isEmpty(columns)) {
+			return null;
+		}
+
+		return columns.get(0);
+	}
+
+	private List<ImportLineColumn> getColumns(ImportFile fileToSearch, String index) {
+
+		List<ImportLineColumn> toReturn = new ArrayList<ImportLineColumn>();
+		MultiKey key = new MultiKey(fileToSearch.getId(), index);
+		ImportLineColumn column = columns.get(key);
+		if (column != null) {
+			toReturn.add(column);
+		}
+
+		for (List<ImportLine> lines : joinLines.values()) {
+			for (ImportLine line : lines) {
+				toReturn.addAll(line.getColumns(fileToSearch, index));
+			}
+		}
+
+		return toReturn;
+	}
+
+	public boolean isEmpty() {
+		return this.columns.isEmpty() && this.joinLines.isEmpty();
+	}
+
+	public void join(List<ImportLine> joinLines, ImportKey keyRef, ImportKey joinKey) {
+
+		List<ImportLine> filteredLines = new ArrayList<ImportLine>();
+
+		for (ImportLine joinLine : joinLines) {
+			Object keyRefValue = getByKey(keyRef);
+			if (keyRefValue != null && keyRefValue.equals(joinLine.getByKey(joinKey))) {
+				filteredLines.add(joinLine);
+			}
+		}
+
+		join(keyRef.getId(), filteredLines);
+	}
+
+	public void join(String keyId, List<ImportLine> lines) {
+		if (!joinLines.containsKey(keyId)) {
+			joinLines.put(keyId, new ArrayList<ImportLine>());
+		}
+
+		for (ImportLine line : lines) {
+			joinLines.get(keyId).add(line);
+			line.setParent(this);
+		}
+	}
+
+	public <T> T parseClass(Class<T> clazz, List<ImportProperty> properties, List<SubClassImportProperty> subClasses)
+			throws ImportLineException, InstantiationException, IllegalAccessException, InvocationTargetException,
+			ImportPropertyException {
+
+		// On applanit la ligne pour merger toutes les lignes jointes qui sont seules
+		flatten();
+
+		return parseClassWithoutFlattening(clazz, properties, subClasses);
+
+	}
+
+	public <T> T parseClassWithoutFlattening(Class<T> clazz, List<ImportProperty> properties,
+			List<SubClassImportProperty> subClasses) throws ImportLineException, InstantiationException,
+			IllegalAccessException, InvocationTargetException, ImportPropertyException {
+
+		T current = clazz.newInstance();
+		for (ImportProperty property : properties) {
+
+			List<ImportTuple> tuples = getTuples(Arrays.asList(property));
+
+			Object value = null;
+
+			if (CollectionUtils.isEmpty(tuples)) {
+				value = getByTuple(property.getType(), property, null);
+			} else if (property.isMultiple()) {
+
+				List<Object> values = new ArrayList<Object>();
+				for (ImportTuple tuple : tuples) {
+					values.add(getByTuple(property.getType(), property, tuple));
+				}
+				value = values;
+
+			} else {
+				value = getByTuple(property.getType(), property, tuples.get(0));
+			}
+
+			BeanUtils.setProperty(current, property.getName(), value);
+		}
+
+		for (SubClassImportProperty subClass : subClasses) {
+
+			// On récupère les tuples pour les properties non multiple de la classes
+			List<ImportProperty> singleProperties = new ArrayList<ImportProperty>();
+			for (ImportProperty property : subClass.getProperties()) {
+				if (!property.isMultiple()) {
+					singleProperties.add(property);
+				}
+			}
+
+			List<ImportTuple> tuples = getTuples(singleProperties);
+
+			if (CollectionUtils.isEmpty(tuples)) {
+				if (subClass.isNotNull()) {
+					throw new NullPropertyImportException(subClass);
+				}
+				break;
+			}
+
+			Object value = null;
+
+			if (subClass.isMultiple()) {
+				List<Object> values = new ArrayList<Object>();
+
+				for (ImportTuple tuple : tuples) {
+					values.add(tuple.getLeaf().parseClassWithoutFlattening(subClass.getType(),
+							subClass.getProperties(), subClass.getSubClassProperties()));
+				}
+
+				value = values;
+
+			} else {
+				value = tuples
+						.get(0)
+						.getLeaf()
+						.parseClassWithoutFlattening(subClass.getType(), subClass.getProperties(),
+								subClass.getSubClassProperties());
+			}
+
+			BeanUtils.setProperty(current, subClass.getName(), value);
+		}
+
+		return current;
+
+	}
+
+	private <T> T getByTuple(Class<T> type, ImportProperty property, ImportTuple tuple) throws ImportPropertyException {
+
+		ImportLineColumn column = null;
+
+		if (tuple != null) {
+			column = tuple.get(property.getFile().getId(), property.getColumnIndex());
+		}
+
+		if (column == null && property.isNotNull()) {
+			throw new NullPropertyImportException(property);
+		}
+
+		return property.getValue(type, column);
+	}
+
+	private void flatten() {
+		// Pour chaque lignes jointes, s'il n'y a qu'un seule ligne, on va récupérer toutes ses colonnes et les ajouter
+		// aux colonnes courantes.
+		Iterator<String> it = joinLines.keySet().iterator();
+
+		while (it.hasNext()) {
+			String lineKey = it.next();
+			List<ImportLine> lines = joinLines.get(lineKey);
+
+			// On va d'abord applanir toutes les lignes jointes
+			for (ImportLine line : lines) {
+				line.flatten();
+			}
+
+			// Ensuite, on va regarder s'il y a une seule ligne pour cette clé. Si c'est le cas, on va récupérer ses
+			// colonnes et ses lignes jointes dans la ligne courante.
+			if (lines.size() == 1) {
+				ImportLine line = lines.get(0);
+
+				// Récupération des colonnes
+				for (ImportLineColumn column : line.columns.values()) {
+					MultiKey key = new MultiKey(column.getFile().getId(), column.getIndex());
+					this.columns.put(key, column);
+				}
+
+				// Récupération des lignes
+				for (String key : line.joinLines.keySet()) {
+					if (!this.joinLines.containsKey(key)) {
+						this.joinLines.put(key, new ArrayList<ImportLine>());
+					}
+
+					this.joinLines.get(key).addAll(line.joinLines.get(key));
+				}
+
+				// Suppression de la ligne jointe de la map
+				it.remove();
+			}
+		}
+
+	}
+
+	private List<ImportTuple> getTuples(List<ImportProperty> properties) {
+
+		Map<MultiKey, ImportProperty> remainingProperties = new HashMap<MultiKey, ImportProperty>();
+
+		for (ImportProperty property : properties) {
+			MultiKey key = new MultiKey(property.getFile().getId(), property.getColumnIndex());
+			remainingProperties.put(key, property);
+		}
+
+		List<ImportLine> leafLines = getLeafLines(remainingProperties);
+
+		List<ImportTuple> toReturn = new ArrayList<ImportTuple>();
+
+		for (ImportLine line : leafLines) {
+			toReturn.add(ImportTuple.buildFromLeaf(line));
+		}
+
+		return toReturn;
+	}
+
+	private List<ImportLine> getLeafLines(Map<MultiKey, ImportProperty> remainingProperties) {
+		// On va parcourir toutes les colonnes et on va supprimer des properties celles qu'on trouve.
+		// S'il en manque, on va appeler de manière récursive les lignes jointes avec les properties restantes.
+
+		List<ImportLine> toReturn = new ArrayList<ImportLine>();
+
+		for (ImportLineColumn column : columns.values()) {
+			MultiKey key = new MultiKey(column.getFile().getId(), column.getIndex());
+			remainingProperties.remove(key);
+		}
+
+		// S'il n'y a plus de propriétés à chercher, on ajoute la ligne en tant que feuille.
+		// S'il y en a encore, on va chercher dans les lignes jointes
+		if (remainingProperties.isEmpty()) {
+			toReturn.add(this);
+		} else {
+			for (List<ImportLine> lines : joinLines.values()) {
+				for (ImportLine line : lines) {
+					toReturn.addAll(line.getLeafLines(remainingProperties));
+				}
+			}
+		}
+
+		return toReturn;
+	}
+
+	public Collection<ImportLineColumn> getColumns() {
+		return this.columns.values();
+	}
 }

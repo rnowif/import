@@ -21,4 +21,6 @@ public interface ImportFile {
 
 	ImportKey getKey(String keyId);
 
+	void addFilter(String column, ImportFileFilter filter);
+
 }
