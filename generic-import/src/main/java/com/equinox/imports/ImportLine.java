@@ -5,18 +5,23 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.keyvalue.MultiKey;
+import org.apache.commons.lang.StringUtils;
 
 import com.equinox.imports.exception.ImportLineException;
 import com.equinox.imports.exception.ImportPropertyException;
 import com.equinox.imports.exception.NullPropertyImportException;
 import com.equinox.imports.file.ImportFile;
+import com.equinox.imports.file.ImportFileJoin;
+import com.equinox.imports.property.ComponentImportProperty;
+import com.equinox.imports.property.CompositeImportProperty;
 import com.equinox.imports.property.ImportKey;
 import com.equinox.imports.property.ImportProperty;
 import com.equinox.imports.property.SubClassImportProperty;
@@ -111,18 +116,32 @@ public class ImportLine {
 		return this.columns.isEmpty() && this.joinLines.isEmpty();
 	}
 
-	public void join(List<ImportLine> joinLines, ImportKey keyRef, ImportKey joinKey) {
+	public void join(List<ImportLine> joinLines, List<ImportFileJoin> joins) {
 
 		List<ImportLine> filteredLines = new ArrayList<ImportLine>();
 
 		for (ImportLine joinLine : joinLines) {
-			Object keyRefValue = getByKey(keyRef);
-			if (keyRefValue != null && keyRefValue.equals(joinLine.getByKey(joinKey))) {
+			// On ne join la ligne que si toutes les jointures correspondent
+			boolean toKeep = true;
+
+			for (ImportFileJoin join : joins) {
+				Object keyRefValue = getByKey(join.getKeyRef());
+				if (keyRefValue == null || !keyRefValue.equals(joinLine.getByKey(join.getJoinKey()))) {
+					toKeep = false;
+				}
+			}
+
+			if (toKeep) {
 				filteredLines.add(joinLine);
 			}
 		}
 
-		join(keyRef.getId(), filteredLines);
+		String keyId = "";
+		for (ImportFileJoin join : joins) {
+			keyId += join.getKeyRef().getId();
+		}
+
+		join(keyId, filteredLines);
 	}
 
 	public void join(String keyId, List<ImportLine> lines) {
@@ -136,20 +155,32 @@ public class ImportLine {
 		}
 	}
 
-	public <T> T parseClass(Class<T> clazz, List<ImportProperty> properties, List<SubClassImportProperty> subClasses)
-			throws ImportLineException, InstantiationException, IllegalAccessException, InvocationTargetException,
-			ImportPropertyException {
+	public <T> T parseClass(Class<T> clazz, List<ImportProperty> properties, List<SubClassImportProperty> subClasses,
+			List<CompositeImportProperty> compositeProperties, ImportClassPostProcessor processor)
+			throws ImportLineException {
 
 		// On applanit la ligne pour merger toutes les lignes jointes qui sont seules
 		flatten();
 
-		return parseClassWithoutFlattening(clazz, properties, subClasses);
+		try {
+			T dto = parseClassWithoutFlattening(clazz, properties, subClasses, compositeProperties);
+
+			if (processor != null) {
+				processor.postProcess(dto);
+			}
+
+			return dto;
+
+		} catch (ImportPropertyException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+			throw new ImportLineException(this, e.getMessage());
+		}
 
 	}
 
-	public <T> T parseClassWithoutFlattening(Class<T> clazz, List<ImportProperty> properties,
-			List<SubClassImportProperty> subClasses) throws ImportLineException, InstantiationException,
-			IllegalAccessException, InvocationTargetException, ImportPropertyException {
+	private <T> T parseClassWithoutFlattening(Class<T> clazz, List<ImportProperty> properties,
+			List<SubClassImportProperty> subClasses, List<CompositeImportProperty> compositeProperties)
+			throws ImportLineException, InstantiationException, IllegalAccessException, InvocationTargetException,
+			ImportPropertyException {
 
 		T current = clazz.newInstance();
 		for (ImportProperty property : properties) {
@@ -175,12 +206,35 @@ public class ImportLine {
 			BeanUtils.setProperty(current, property.getName(), value);
 		}
 
+		for (CompositeImportProperty property : compositeProperties) {
+
+			List<ImportTuple> tuples = getTuples(property);
+
+			Object value = null;
+
+			if (CollectionUtils.isEmpty(tuples)) {
+				value = property.getValue(property.getType(), null);
+			} else if (property.isMultiple()) {
+
+				List<Object> values = new ArrayList<Object>();
+				for (ImportTuple tuple : tuples) {
+					values.add(property.getValue(property.getType(), tuple));
+				}
+				value = values;
+
+			} else {
+				value = property.getValue(property.getType(), tuples.get(0));
+			}
+
+			BeanUtils.setProperty(current, property.getName(), value);
+		}
+
 		for (SubClassImportProperty subClass : subClasses) {
 
-			// On récupère les tuples pour les properties non multiple de la classes
+			// On récupère les tuples pour les properties non multiple de la classe et qui ont une colonne
 			List<ImportProperty> singleProperties = new ArrayList<ImportProperty>();
 			for (ImportProperty property : subClass.getProperties()) {
-				if (!property.isMultiple()) {
+				if (!property.isMultiple() && StringUtils.isNotEmpty(property.getColumnIndex())) {
 					singleProperties.add(property);
 				}
 			}
@@ -189,7 +243,7 @@ public class ImportLine {
 
 			if (CollectionUtils.isEmpty(tuples)) {
 				if (subClass.isNotNull()) {
-					throw new NullPropertyImportException(subClass);
+					throw new NullPropertyImportException(subClass.getName());
 				}
 				break;
 			}
@@ -201,7 +255,8 @@ public class ImportLine {
 
 				for (ImportTuple tuple : tuples) {
 					values.add(tuple.getLeaf().parseClassWithoutFlattening(subClass.getType(),
-							subClass.getProperties(), subClass.getSubClassProperties()));
+							subClass.getProperties(), subClass.getSubClassProperties(),
+							subClass.getCompositeProperties()));
 				}
 
 				value = values;
@@ -211,7 +266,7 @@ public class ImportLine {
 						.get(0)
 						.getLeaf()
 						.parseClassWithoutFlattening(subClass.getType(), subClass.getProperties(),
-								subClass.getSubClassProperties());
+								subClass.getSubClassProperties(), null);
 			}
 
 			BeanUtils.setProperty(current, subClass.getName(), value);
@@ -230,7 +285,7 @@ public class ImportLine {
 		}
 
 		if (column == null && property.isNotNull()) {
-			throw new NullPropertyImportException(property);
+			throw new NullPropertyImportException(property.getName());
 		}
 
 		return property.getValue(type, column);
@@ -239,10 +294,9 @@ public class ImportLine {
 	private void flatten() {
 		// Pour chaque lignes jointes, s'il n'y a qu'un seule ligne, on va récupérer toutes ses colonnes et les ajouter
 		// aux colonnes courantes.
-		Iterator<String> it = joinLines.keySet().iterator();
+		Set<String> keys = new HashSet<String>(joinLines.keySet());
 
-		while (it.hasNext()) {
-			String lineKey = it.next();
+		for (String lineKey : keys) {
 			List<ImportLine> lines = joinLines.get(lineKey);
 
 			// On va d'abord applanir toutes les lignes jointes
@@ -271,7 +325,7 @@ public class ImportLine {
 				}
 
 				// Suppression de la ligne jointe de la map
-				it.remove();
+				this.joinLines.remove(lineKey);
 			}
 		}
 
@@ -279,11 +333,11 @@ public class ImportLine {
 
 	private List<ImportTuple> getTuples(List<ImportProperty> properties) {
 
-		Map<MultiKey, ImportProperty> remainingProperties = new HashMap<MultiKey, ImportProperty>();
+		List<MultiKey> remainingProperties = new ArrayList<>();
 
 		for (ImportProperty property : properties) {
 			MultiKey key = new MultiKey(property.getFile().getId(), property.getColumnIndex());
-			remainingProperties.put(key, property);
+			remainingProperties.add(key);
 		}
 
 		List<ImportLine> leafLines = getLeafLines(remainingProperties);
@@ -297,7 +351,27 @@ public class ImportLine {
 		return toReturn;
 	}
 
-	private List<ImportLine> getLeafLines(Map<MultiKey, ImportProperty> remainingProperties) {
+	private List<ImportTuple> getTuples(CompositeImportProperty composite) {
+
+		List<MultiKey> remainingProperties = new ArrayList<>();
+
+		for (ComponentImportProperty property : composite.getComponents()) {
+			MultiKey key = new MultiKey(property.getFile().getId(), property.getColumnIndex());
+			remainingProperties.add(key);
+		}
+
+		List<ImportLine> leafLines = getLeafLines(remainingProperties);
+
+		List<ImportTuple> toReturn = new ArrayList<ImportTuple>();
+
+		for (ImportLine line : leafLines) {
+			toReturn.add(ImportTuple.buildFromLeaf(line));
+		}
+
+		return toReturn;
+	}
+
+	private List<ImportLine> getLeafLines(List<MultiKey> remainingProperties) {
 		// On va parcourir toutes les colonnes et on va supprimer des properties celles qu'on trouve.
 		// S'il en manque, on va appeler de manière récursive les lignes jointes avec les properties restantes.
 

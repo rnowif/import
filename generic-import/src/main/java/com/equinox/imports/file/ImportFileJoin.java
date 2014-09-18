@@ -1,8 +1,5 @@
 package com.equinox.imports.file;
 
-import java.util.List;
-
-import com.equinox.imports.ImportLine;
 import com.equinox.imports.property.ImportKey;
 
 public class ImportFileJoin {
@@ -23,8 +20,11 @@ public class ImportFileJoin {
 		return file;
 	}
 
-	public void joinLines(ImportLine line, List<ImportLine> joinLines) {
-		line.join(joinLines, keyRef, joinKey);
+	public ImportKey getJoinKey() {
+		return joinKey;
 	}
 
+	public ImportKey getKeyRef() {
+		return keyRef;
+	}
 }

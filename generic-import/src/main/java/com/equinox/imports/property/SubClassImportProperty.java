@@ -10,11 +10,13 @@ public class SubClassImportProperty {
 	private Boolean notNull;
 	private Boolean multiple;
 	private final List<ImportProperty> properties;
+	private final List<CompositeImportProperty> compositeProperties;
 	private final List<SubClassImportProperty> subClassProperties;
 
 	public SubClassImportProperty() {
 		this.properties = new ArrayList<ImportProperty>();
 		this.subClassProperties = new ArrayList<SubClassImportProperty>();
+		this.compositeProperties = new ArrayList<CompositeImportProperty>();
 	}
 
 	public Class<?> getType() {
@@ -63,6 +65,14 @@ public class SubClassImportProperty {
 
 	public List<SubClassImportProperty> getSubClassProperties() {
 		return subClassProperties;
+	}
+
+	public void addCompositeProperty(CompositeImportProperty property) {
+		this.compositeProperties.add(property);
+	}
+
+	public List<CompositeImportProperty> getCompositeProperties() {
+		return compositeProperties;
 	}
 
 }

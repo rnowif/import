@@ -19,13 +19,13 @@ public abstract class AbstractImportFile implements ImportFile {
 
 	private static final Log logger = LogFactory.getLog(AbstractImportFile.class);
 
-	private final List<ImportFileJoin> joints;
+	private final Map<ImportFile, List<ImportFileJoin>> joints;
 	private final Map<String, ImportKey> keys;
 	private final Map<String, ImportFileFilter> filters;
 	private final String id;
 
 	public AbstractImportFile(String id) {
-		this.joints = new ArrayList<ImportFileJoin>();
+		this.joints = new HashMap<ImportFile, List<ImportFileJoin>>();
 		this.keys = new HashMap<String, ImportKey>();
 		this.filters = new HashMap<String, ImportFileFilter>();
 		this.id = id;
@@ -33,18 +33,11 @@ public abstract class AbstractImportFile implements ImportFile {
 
 	@Override
 	public void addJoin(ImportFileJoin joint) {
-		joints.add(joint);
-	}
-
-	@Override
-	public int getFilesCount() {
-		int count = 1;
-
-		for (ImportFileJoin join : joints) {
-			count += join.getFile().getFilesCount();
+		if (!this.joints.containsKey(joint.getFile())) {
+			this.joints.put(joint.getFile(), new ArrayList<ImportFileJoin>());
 		}
 
-		return count;
+		joints.get(joint.getFile()).add(joint);
 	}
 
 	@Override
@@ -62,8 +55,29 @@ public abstract class AbstractImportFile implements ImportFile {
 		return this.keys.get(keyId);
 	}
 
-	protected List<ImportFileJoin> getJoints() {
-		return joints;
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((id == null) ? 0 : id.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		AbstractImportFile other = (AbstractImportFile) obj;
+		if (id == null) {
+			if (other.id != null)
+				return false;
+		} else if (!id.equals(other.id))
+			return false;
+		return true;
 	}
 
 	@Override
@@ -103,11 +117,11 @@ public abstract class AbstractImportFile implements ImportFile {
 
 		logger.info("Lignes lues dans le fichier : " + lines.size());
 
-		for (ImportFileJoin join : getJoints()) {
-			List<ImportLine> joinLines = join.getFile().buildLignes(files);
+		for (ImportFile joinFile : this.joints.keySet()) {
+			List<ImportLine> joinLines = joinFile.buildLignes(files);
 
 			for (ImportLine line : lines) {
-				join.joinLines(line, joinLines);
+				line.join(joinLines, this.joints.get(joinFile));
 			}
 		}
 

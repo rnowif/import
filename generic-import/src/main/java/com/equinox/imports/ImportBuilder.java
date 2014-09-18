@@ -19,6 +19,8 @@ import com.equinox.imports.file.ImportFileJoin;
 import com.equinox.imports.file.XLSImportFile;
 import com.equinox.imports.file.XMLImportFile;
 import com.equinox.imports.property.AbstractImportField;
+import com.equinox.imports.property.ComponentImportProperty;
+import com.equinox.imports.property.CompositeImportProperty;
 import com.equinox.imports.property.ImportKey;
 import com.equinox.imports.property.ImportProperty;
 import com.equinox.imports.property.SubClassImportProperty;
@@ -63,6 +65,14 @@ public class ImportBuilder {
 		Class<?> clazz = readClass(classElement, "name", null);
 		ClassImporter classImporter = new ClassImporter(clazz);
 
+		// Lecture du processor
+		ImportClassPostProcessor processor = null;
+		String processorClassString = classElement.getAttribute("post-process-class");
+		if (StringUtils.isNotEmpty(processorClassString)) {
+			processor = Class.forName(processorClassString).asSubclass(ImportClassPostProcessor.class).newInstance();
+		}
+		classImporter.setProcessor(processor);
+
 		// Lecture des fichiers
 		List<Element> fileNodes = getChildrenByTagName(classElement, "file");
 		if (fileNodes.size() == 0) {
@@ -82,6 +92,13 @@ public class ImportBuilder {
 		for (Element propertyNode : propertyNodes) {
 			ImportProperty property = readProperty(propertyNode, files);
 			classImporter.addProperty(property);
+		}
+
+		// Lecture des propriétés composites
+		List<Element> compositePropertyNodes = getChildrenByTagName(classElement, "composite-property");
+		for (Element propertyNode : compositePropertyNodes) {
+			CompositeImportProperty property = readCompositeProperty(propertyNode, files);
+			classImporter.addCompositeProperty(property);
 		}
 
 		// Lecture des propriétés sous classe
@@ -126,9 +143,10 @@ public class ImportBuilder {
 			ImportKey key = readKey(keyNode);
 			file.addKey(key);
 
-			// Si parent n'est pas nul, on cherche key-ref et la clé associée dans le parent.
-			if (parent != null) {
+			String keyRefId = keyNode.getAttribute("key-ref");
 
+			// Si le keyRef n'est pas vide, on cherche la clé associée dans le parent.
+			if (StringUtils.isNotEmpty(keyRefId)) {
 				ImportFileJoin joint = readJoin(keyNode, parent, file, key);
 				parent.addJoin(joint);
 			}
@@ -251,6 +269,69 @@ public class ImportBuilder {
 
 	}
 
+	private static CompositeImportProperty readCompositeProperty(Element propertyNode, Map<String, ImportFile> files)
+			throws ClassNotFoundException, InstantiationException, IllegalAccessException {
+
+		CompositeImportProperty property = new CompositeImportProperty();
+
+		String name = propertyNode.getAttribute("name");
+
+		Boolean notNull = readBoolean(propertyNode, "not-null", false);
+		Boolean multiple = readBoolean(propertyNode, "multiple", false);
+		// Lecture du type (String par défaut)
+		Class<?> type = readClass(propertyNode, "type", String.class);
+
+		// Lecture du compositor
+		CompositeImportPropertyComposer compositor = null;
+		String processorClassString = propertyNode.getAttribute("compose-class");
+		if (StringUtils.isNotEmpty(processorClassString)) {
+			compositor = Class.forName(processorClassString).asSubclass(CompositeImportPropertyComposer.class)
+					.newInstance();
+		}
+
+		if (compositor == null) {
+			throw new IllegalArgumentException("Aucun compositor défini pour la propriété composite " + name);
+		}
+
+		property.setName(name);
+		property.setNotNull(notNull);
+		property.setMultiple(multiple);
+		property.setType(type);
+		property.setComposer(compositor);
+
+		// Lecture des propriétés composantes
+		List<Element> componentPropertyNodes = getChildrenByTagName(propertyNode, "component-property");
+		for (Element componentNode : componentPropertyNodes) {
+			ComponentImportProperty component = readComponentProperty(componentNode, files);
+			property.addComponentProperty(component);
+		}
+
+		return property;
+	}
+
+	private static ComponentImportProperty readComponentProperty(Element propertyNode, Map<String, ImportFile> files)
+			throws ClassNotFoundException, InstantiationException, IllegalAccessException {
+
+		ComponentImportProperty property = new ComponentImportProperty();
+
+		String refId = propertyNode.getAttribute("file-ref");
+		String name = propertyNode.getAttribute("name");
+		String defaultValue = propertyNode.getAttribute("default-value");
+		String columnIndex = propertyNode.getAttribute("column");
+
+		ImportFile joinFile = files.get(refId);
+		if (joinFile == null) {
+			throw new IllegalArgumentException("Fichier introuvable : " + refId);
+		}
+
+		property.setDefaultValue(defaultValue);
+		property.setFile(joinFile);
+		property.setName(name);
+		property.setColumnIndex(columnIndex);
+
+		return property;
+	}
+
 	private static SubClassImportProperty readSubClassProperty(Element subClassPropertyNode,
 			Map<String, ImportFile> files) throws ClassNotFoundException, InstantiationException,
 			IllegalAccessException {
@@ -277,6 +358,13 @@ public class ImportBuilder {
 		for (Element propertyNode : propertyNodes) {
 			ImportProperty property = readProperty(propertyNode, files);
 			subClass.addProperty(property);
+		}
+
+		// Lecture des propriétés composites
+		List<Element> compositePropertyNodes = getChildrenByTagName(subClassPropertyNode, "composite-property");
+		for (Element propertyNode : compositePropertyNodes) {
+			CompositeImportProperty property = readCompositeProperty(propertyNode, files);
+			subClass.addCompositeProperty(property);
 		}
 
 		// Lecture des sous classes

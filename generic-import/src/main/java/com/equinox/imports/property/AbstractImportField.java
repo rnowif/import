@@ -50,7 +50,7 @@ public abstract class AbstractImportField {
 
 	protected <T> T getValue(Class<T> type, String stringValue) throws ImportPropertyException {
 
-		if (StringUtils.isEmpty(stringValue) && generator == null) {
+		if (StringUtils.isEmpty(stringValue) && generator == null && transformer == null) {
 			return null;
 		}
 

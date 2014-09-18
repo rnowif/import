@@ -148,7 +148,7 @@ public class CSVImportFile extends AbstractImportFile {
 	protected String extractFile(String[] files) throws FileNotFoundException {
 		// On recherche le fichier associé au fichier courant
 		String toReturn = null;
-		if (files.length == 1 && this.fileNumber == 1) {
+		if (files.length == 1) {
 			toReturn = files[0];
 		} else {
 			for (String file : files) {

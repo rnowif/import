@@ -81,15 +81,15 @@ public class ImportProperty extends AbstractImportField {
 		try {
 			value = getValue(type, stringValue);
 		} catch (NumberFormatException | ClassCastException e) {
-			throw new InvalidFormatPropertyImportException(this, stringValue);
+			throw new InvalidFormatPropertyImportException(this.name, getType().getSimpleName(), stringValue);
 		}
 
 		if (value == null && this.notNull) {
-			throw new NullPropertyImportException(this);
+			throw new NullPropertyImportException(this.name);
 		}
 
 		if (value != null && this.length != null && value.toString().length() > this.length) {
-			throw new TooLongPropertyImportException(this, value.toString().length());
+			throw new TooLongPropertyImportException(this.name, this.length, value.toString().length());
 		}
 
 		return value;

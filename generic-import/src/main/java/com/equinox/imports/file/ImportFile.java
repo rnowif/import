@@ -11,8 +11,6 @@ public interface ImportFile {
 
 	void addJoin(ImportFileJoin joint);
 
-	int getFilesCount();
-
 	String getId();
 
 	List<ImportLine> buildLignes(String... files) throws ImportException, IOException;
