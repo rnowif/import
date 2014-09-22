@@ -1,6 +1,7 @@
 package com.equinox.imports;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import com.equinox.imports.property.ImportKey;
 import com.equinox.imports.property.ImportProperty;
 import com.equinox.imports.property.SubClassImportProperty;
 import com.equinox.imports.transformer.BooleanPropertyTransformer;
+import com.equinox.imports.transformer.DatePropertyTransformer;
 import com.equinox.imports.transformer.DoublePropertyTransformer;
 import com.equinox.imports.transformer.ImportPropertyTransformer;
 import com.equinox.imports.transformer.IntegerPropertyTransformer;
@@ -243,6 +245,8 @@ public class ImportBuilder {
 			transformer = new DoublePropertyTransformer();
 		} else if (Boolean.class.equals(type)) {
 			transformer = new BooleanPropertyTransformer();
+		} else if (Date.class.equals(type)) {
+			transformer = new DatePropertyTransformer();
 		}
 
 		// Lecture de la classe de transformation
