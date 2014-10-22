@@ -22,7 +22,7 @@ List<MyObject> objects = importer.importFrom(MyObject.class, "file.csv");
 La classe de base pour utiliser la librairie est la classe ``` ImportFactoryBean ```. 
 Elle peut s'instancier de manière manuelle ou grâce à Spring.
 
-####Instanciation manuelle :
+####Instanciation manuelle
 
 ```
 ImportFactoryBean factory = new ImportFactoryBean();
@@ -157,12 +157,12 @@ La propriété est définie par l'élément `property`.
 Les attributs possibles sont :
 - `file-ref` : obligatoire. Indique dans quel fichier la propriété doit être lue.
 - `name` : obligatoire. Indique le nom de la propriété dans l'objet Java.
-- `column` : obligatoire. Indique le nom ou l'index (0-based) de la colonne dans le fichier.
+- `column` : obligatoire. Indique le nom ou l'index (0-based) de la colonne dans le fichier. Dans le cas d'un fichier xml, la colonne est l'ensemble de la hiérarchie des éléments avec l'attribut éventuel entre crochet (`Root/Foo[bar]` dans le cas `<Root><Foo bar="value" /></Root>` ou `Root/Foo` dans le cas `<Root><Foo>value</Foo></Root>` avec `Root` égal à l'attribut `base-element` du fichier).
 - `type` : pas obligatoire. Indique le type de la propriété de l'objet Java.
 - `length` : pas obligatoire. Indique la taille maximale de la propriété de l'objet Java (sur laquelle la méthode `Object#toString()` a été appelée).
 - `not-null` : pas obligatoire. Indique si la propriété de l'objet Java peut être nulle ou non.
 - `multiple` : pas obligatoire. Indique si la propriété de l'objet Java est une liste de `type`.
-- `default-value` : pas obligatoire. Indique la valeur par défaut de la colonne (valeur prise si la colonne est vide).
+- `default-value` : pas obligatoire. Indique la valeur par défaut de la colonne (valeur prise si la colonne est vide). Si une valeur par défaut est définie, l'attribut `column` n'est plus obligatoire.
 
 ####Propriétés composites
 Quand la propriété de l'objet Java est construite à partir de plusieurs colonnes du fichier, il est possible d'utiliser une propriété composite associée à un `CompositeImportPropertyComposer`. Cette interface fonctionnelle possède une méthode `compose(Map<String, String>)` qui retourne un `Object` et prend en paramètre l'ensemble des valeurs des colonnes de la ligne, indexées par le nom de la sous propriété. 
@@ -211,13 +211,8 @@ public class Bar {
   
   public Bar() { }
   
-  public void setObject(MyObject object) {
-    this.object = object;
-  }
-  
-  public MyObject getObject() {
-    return object;
-  }
+  public void setObject(MyObject object) { this.object = object; }
+  public MyObject getObject() { return object; }
   
 }
 ```
@@ -250,8 +245,34 @@ L'élément `sub-class-property` peut avoir les attributs suivants :
 - `multiple`: cf. propriété.
 
 ###Transformateurs
+Quand les propriétés ou les clés ne sont pas des types de base ou doivent être transformées avant d'être settées, il est possibile d'utiliser un transformateur. L'interface `ImportPropertyTransformer` possède une méthode `transformProperty(value)` qui retourne un `Object` et qui prend en paramètre la valeur de la colonne à transformer.
+
+Si l'on veut préfixer une propriété avec une chaine de caractère, il est possible d'écrire le filtre suivant :
+```
+package com.foo.transform;
+
+import com.equinox.imports.transformer.ImportPropertyTransformer;
+
+public class FooPrefixPropertyTransformer implements ImportPropertyTransformer {
+	
+	@Override 
+	public String transformProperty(String value) {
+		return "Foo : " + value;
+	}
+}
+```
+
+La configuration de la propriété sera alors :
+```
+<property file-ref="main" name="foo" column="6" type="java.lang.String" transform-class="com.foo.FooPrefixPropertyTransformer" />
+	
+```
+
+Cet attribut peut s'appliquer aux propriétés (même composite ou sous-classes) et aux clés.
 
 ###Générateurs
+
+Quand un générateur est appliqué, l'attribut `column` n'est plus obligatoire.
 
 ###Post-processeurs
 
