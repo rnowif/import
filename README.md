@@ -76,10 +76,10 @@ Le fichier de configuration minimal pour l'importer depuis un fichier csv est le
 
 <import-mapping id="myMapping">
 	<class name="foo.MyObject">
-	  <file id="main" type="csv" delimitor=";" />
+		<file id="main" type="csv" delimitor=";" />
 	  
-	  <property file-ref="main" name="stringField" column="0" type="java.lang.String" />
-	  <property file-ref="main" name="integerField" column="1" type="java.lang.Integer" />
+		<property file-ref="main" name="stringField" column="0" type="java.lang.String" />
+		<property file-ref="main" name="integerField" column="1" type="java.lang.Integer" />
 	</class>
 </import-mapping>
 ```
@@ -129,7 +129,7 @@ public class FooFilter implements ImportFileFilter {
 Dans le fichier de configuration, il va être déclaré comme ceci :
 ```
 <file id="main" type="csv" delimitor=";">
-  <filter column="4" class="foo.filter.FooFilter" />
+ 	<filter column="4" class="foo.filter.FooFilter" />
 </file>
 ```
 
@@ -187,8 +187,8 @@ public class BarPropertyComposer implements CompositeImportPropertyComposer {
 La configuration d'une propriété composite se fait comme suit :
 ```
 <composite-property name="type" type="java.lang.String" compose-class="com.foo.BarPropertyComposer">
-			<component-property file-ref="main" name="bar1" column="4" />
-			<component-property file-ref="main" name="bar2" column="7" />
+	<component-property file-ref="main" name="bar1" column="4" />
+	<component-property file-ref="main" name="bar2" column="7" />
 </composite-property>
 ```
 
@@ -234,7 +234,7 @@ public class MyObject {
 La configuration de la lecture de la propriété `object` de `Bar` se fait comme ceci :
 ```
 <sub-class-property type="com.foo.MyObject" name="object">
-			<property file-ref="main" name="stringField" column="4" />
+	<property file-ref="main" name="stringField" column="4" />
 </sub-class-property>
 ```
 
@@ -265,7 +265,6 @@ public class FooPrefixPropertyTransformer implements ImportPropertyTransformer {
 La configuration de la propriété sera alors :
 ```
 <property file-ref="main" name="foo" column="6" type="java.lang.String" transform-class="com.foo.FooPrefixPropertyTransformer" />
-	
 ```
 
 Cet attribut peut s'appliquer aux propriétés (même composite ou sous-classes) et aux clés.
