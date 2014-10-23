@@ -186,7 +186,7 @@ public class BarPropertyComposer implements CompositeImportPropertyComposer {
 
 La configuration d'une propriété composite se fait comme suit :
 ```
-<composite-property name="type" type="java.lang.String" compose-class="com.foo.BarPropertyComposer">
+<composite-property name="bar" type="java.lang.String" compose-class="com.foo.BarPropertyComposer">
 	<component-property file-ref="main" name="bar1" column="4" />
 	<component-property file-ref="main" name="bar2" column="7" />
 </composite-property>
