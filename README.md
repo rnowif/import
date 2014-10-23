@@ -269,12 +269,94 @@ La configuration de la propriété sera alors :
 
 Cet attribut peut s'appliquer aux propriétés (même composite ou sous-classes) et aux clés.
 
-###Générateurs
+Les types de base gérés par la librairie sont :
+- `String` : la colonne est retournée telle quelle.
+- `Long`: la colonne est parsée en `Long` par la méthode `Long.valueOf(String)`.
+- `Integer` : la colonne est parsée en `Integer` par la méthode `Integer.valueOf(String)`.
+- `Double` : la colonne est parsée en `Double` par la méthode `Double.valueOf(String)`.
+- `Boolean` : la colonne est `true` si égale à 1 ou `true`, `false` sinon.
+- `Date`: la colonne est parsée en `Date` en suivant le format `yyyy-MM-dd - HH:mm:ss`.
 
-Quand un générateur est appliqué, l'attribut `column` n'est plus obligatoire.
+Pour tous les autres types ou autres format, il faut faire des transformateurs personnalisés.
+
+###Générateurs
+Quand une propriété doit être générée, quelle que soit la valeur des colonnes, il faut passer par un générateur. L'interface `ImportPropertyGenerator` possède une méthode `generate` qui retourne un `Object`. Quand un générateur est appliqué, l'attribut `column` n'est plus obligatoire.
+
+Si l'on veut générer une propriété en suivant une séquence, il est possible d'écrire le générateur suivant :
+```
+package com.foo.generator;
+
+import com.equinox.imports.ImportPropertyGenerator;
+
+public class FooSequenceGenerator implements ImportPropertyGenerator {
+
+	private Integer ordreCourant = 0;
+	
+	@Override 
+	public Integer generate() {
+		return ordreCourant++;
+	}
+}
+```
+
+La configuration de la propriété sera alors :
+```
+<property file-ref="main" name="foo" type="java.lang.Integer" generator-class="com.foo.FooSequenceGenerator" />
+```
+
+Cet attribut peut s'appliquer aux propriétés (même composite ou sous-classes) et aux clés.
 
 ###Post-processeurs
+Certaines vérifications et certains traitements ne peuvent être appliqués à l'objet qu'une fois que toutes les propriétés ont été settées. Pour ce genre de cas, il faut utiliser une `post-process-class` qui va traiter l'objet une fois finalisé.
+L'interface `ImportClassPostProcessor` possède une méthode `postProcess(Object)` qui prend en paramètre l'objet final.
 
+Soit la classe 
+``` 
+package foo;
+
+public class MyObject {
+  private Integer foo;
+  private Integer bar;
+  
+  public MyObject() { }
+  
+  // Getters et Setters ...
+  
+}
+```
+
+Si l'on veut que l'objet soit créé seulement si `foo` est supérieur à `bar`, il est possible d'écrire le post-processeur suivant :
+```
+package com.foo.postProcess;
+
+import com.equinox.imports.ImportClassPostProcessor;
+
+public class FooBarPostProcessor implements ImportClassPostProcessor {
+
+	@Override
+	public void postProcess(Object object) throw ImportPropertyException {
+		MyObject obj = (MyObject) object;
+		if (obj.getFoo() < obj.getBar()) {
+			throw new ImportPropertyException("Foo must be greater than bar");
+		}
+	}
+
+}
+```
+
+La configuration de la classe se fera alors comme ceci :
+```
+<class name="com.foo.MyObject" post-process-class="com.foo.postProcess.FooBarPostProcessor">
+	<!-- Déclaration des propriétés ... -->
+</class>
+```
+
+###Exceptions
+Les méthodes des interface `CompositeImportPropertyComposer`, `ImportClassPostProcessor` et `ImportPropertyTransformer` peuvent renvoyer des exceptions du type `ImportPropertyException`. Ces exceptions sont lancées lorsqu'il est impossible de créer l'objet à cause d'une propriété particulière.
+Des exceptions héritant de `ImportPropertyException` ont été définies et peuvent être utilisées dans les compositeurs, post-processeurs et transformeurs personnalisés :
+- `InvalidFormatPropertyImportException` : peut être lancée quand la colonne n'est pas au bon format. Le constructeur de cette exception prend en argument le nom de la propriété, le format attendu, le format réel et une exception éventuelle.
+- `NullPropertyImportException` : peut être lancée quand la colonne est nulle et ne devrait pas. Le constructeur de cette exception prend en argument seulement le nom de la propriété.
+- `TooLongPropertyImportException` : peut être lancée quand la valeur de la colonne est trop long. Le constructeur de cette exception prend en argument le nom de la propriété, la taille maximale et la taille réelle.
 
 ##Licence
 
