@@ -85,7 +85,7 @@ Le fichier de configuration minimal pour l'importer depuis un fichier csv est le
 ```
 
 ###Fichiers
-Les fichiers sont définis par l'élément ```File```. Il est obligatoire d'avoir au moins un fichier défini par classe.
+Les fichiers sont définis par l'élément ```file```. Il est obligatoire d'avoir au moins un fichier défini par classe.
 Les attributs possibles sont :
 - `id` : obligatoire. Il donne un nom unique au fichier pour le référencer dans le reste de la configuration.
 - `type` : obligatoire. Les types disponibles sont csv, xls ou xml
@@ -200,7 +200,7 @@ L'élément `composite-property` peut avoir les attributs suivants :
 - `compose-class` : obligatoire. Indique la classe qu va servir à composer la propriété.
 
 ####Propriétés sous-classes
-Quand la propriété de l'objet Java est une classe dont les propriétés sont elles-mêmes lues dans le fichier, il est possible d'utilisé une propriété sous-classe.
+Quand la propriété de l'objet Java est une classe dont les propriétés sont elles-mêmes lues dans le fichier, il est possible d'utiliser une propriété sous-classe.
 
 Soit les classes suivantes :
 ``` 
