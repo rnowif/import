@@ -121,7 +121,7 @@ public class XMLImportFile extends AbstractImportFile {
 
 	private Document getDocument(String file) throws ParseFileImportException {
 		try {
-			return ImportUtils.createDocument(ImportUtils.lireFichier(file));
+			return ImportUtils.createDocument(ImportUtils.readFile(file));
 		} catch (IOException | SAXException | ParserConfigurationException e) {
 			throw new ParseFileImportException("Erreur lors du parsage du fichier " + file + " : " + e.getMessage(),
 					this, e);
