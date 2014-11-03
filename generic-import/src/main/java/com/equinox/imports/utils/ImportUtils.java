@@ -28,7 +28,7 @@ public class ImportUtils {
 		return toReturn;
 	}
 
-	public static String lireFichier(String fileName) throws IOException {
+	public static String readFile(String fileName) throws IOException {
 		StringBuilder content = new StringBuilder();
 		String line;
 
