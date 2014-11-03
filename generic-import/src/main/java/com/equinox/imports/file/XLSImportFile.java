@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,7 +45,9 @@ public class XLSImportFile extends AbstractImportFile {
 		this.skiplines = skiplines;
 		this.labels = labels;
 		this.dataFormatter = new DataFormatter();
-		this.decimalFormat = new DecimalFormat("#.##########");
+		DecimalFormatSymbols symbols = new DecimalFormatSymbols();
+		symbols.setDecimalSeparator('.');
+		this.decimalFormat = new DecimalFormat("#.##########", symbols);
 		this.dateFormat = new SimpleDateFormat(DATE_FORMAT);
 	}
 
