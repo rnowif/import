@@ -245,31 +245,31 @@ public class ImportLine {
 				if (subClass.isNotNull()) {
 					throw new NullPropertyImportException(subClass.getName());
 				}
-				break;
-			}
+			} else {
 
-			Object value = null;
+				Object value = null;
 
-			if (subClass.isMultiple()) {
-				List<Object> values = new ArrayList<Object>();
+				if (subClass.isMultiple()) {
+					List<Object> values = new ArrayList<Object>();
 
-				for (ImportTuple tuple : tuples) {
-					values.add(tuple.getLeaf().parseClassWithoutFlattening(subClass.getType(),
-							subClass.getProperties(), subClass.getSubClassProperties(),
-							subClass.getCompositeProperties()));
+					for (ImportTuple tuple : tuples) {
+						values.add(tuple.getLeaf().parseClassWithoutFlattening(subClass.getType(),
+								subClass.getProperties(), subClass.getSubClassProperties(),
+								subClass.getCompositeProperties()));
+					}
+
+					value = values;
+
+				} else {
+					value = tuples
+							.get(0)
+							.getLeaf()
+							.parseClassWithoutFlattening(subClass.getType(), subClass.getProperties(),
+									subClass.getSubClassProperties(), null);
 				}
 
-				value = values;
-
-			} else {
-				value = tuples
-						.get(0)
-						.getLeaf()
-						.parseClassWithoutFlattening(subClass.getType(), subClass.getProperties(),
-								subClass.getSubClassProperties(), null);
+				BeanUtils.setProperty(current, subClass.getName(), value);
 			}
-
-			BeanUtils.setProperty(current, subClass.getName(), value);
 		}
 
 		return current;
