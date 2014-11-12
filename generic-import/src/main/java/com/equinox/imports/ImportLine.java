@@ -375,21 +375,24 @@ public class ImportLine {
 		// On va parcourir toutes les colonnes et on va supprimer des properties celles qu'on trouve.
 		// S'il en manque, on va appeler de manière récursive les lignes jointes avec les properties restantes.
 
+		// On copie remaningProperties pour éviter de modifier la valeur de la variable dans la méthode appelante.
+		List<MultiKey> remainingPropertiesCopy = new ArrayList<>(remainingProperties);
+
 		List<ImportLine> toReturn = new ArrayList<ImportLine>();
 
 		for (ImportLineColumn column : columns.values()) {
 			MultiKey key = new MultiKey(column.getFile().getId(), column.getIndex());
-			remainingProperties.remove(key);
+			remainingPropertiesCopy.remove(key);
 		}
 
 		// S'il n'y a plus de propriétés à chercher, on ajoute la ligne en tant que feuille.
 		// S'il y en a encore, on va chercher dans les lignes jointes
-		if (remainingProperties.isEmpty()) {
+		if (remainingPropertiesCopy.isEmpty()) {
 			toReturn.add(this);
 		} else {
 			for (List<ImportLine> lines : joinLines.values()) {
 				for (ImportLine line : lines) {
-					toReturn.addAll(line.getLeafLines(remainingProperties));
+					toReturn.addAll(line.getLeafLines(remainingPropertiesCopy));
 				}
 			}
 		}
