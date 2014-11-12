@@ -334,13 +334,18 @@ public class ImportLine {
 	private List<ImportTuple> getTuples(List<ImportProperty> properties) {
 
 		List<MultiKey> remainingProperties = new ArrayList<>();
+		List<MultiKey> remainingNotNullProperties = new ArrayList<>();
 
 		for (ImportProperty property : properties) {
 			MultiKey key = new MultiKey(property.getFile().getId(), property.getColumnIndex());
 			remainingProperties.add(key);
+
+			if (property.isNotNull()) {
+				remainingNotNullProperties.add(key);
+			}
 		}
 
-		List<ImportLine> leafLines = getLeafLines(remainingProperties);
+		List<ImportLine> leafLines = getLeafLines(remainingProperties, remainingNotNullProperties);
 
 		List<ImportTuple> toReturn = new ArrayList<ImportTuple>();
 
@@ -360,7 +365,8 @@ public class ImportLine {
 			remainingProperties.add(key);
 		}
 
-		List<ImportLine> leafLines = getLeafLines(remainingProperties);
+		// Pas de propriété not null pour les composite properties
+		List<ImportLine> leafLines = getLeafLines(remainingProperties, new ArrayList<MultiKey>());
 
 		List<ImportTuple> toReturn = new ArrayList<ImportTuple>();
 
@@ -371,28 +377,33 @@ public class ImportLine {
 		return toReturn;
 	}
 
-	private List<ImportLine> getLeafLines(List<MultiKey> remainingProperties) {
+	private List<ImportLine> getLeafLines(List<MultiKey> remainingProperties, List<MultiKey> remainingNotNullProperties) {
 		// On va parcourir toutes les colonnes et on va supprimer des properties celles qu'on trouve.
 		// S'il en manque, on va appeler de manière récursive les lignes jointes avec les properties restantes.
 
 		// On copie remaningProperties pour éviter de modifier la valeur de la variable dans la méthode appelante.
 		List<MultiKey> remainingPropertiesCopy = new ArrayList<>(remainingProperties);
+		List<MultiKey> remainingNotNullPropertiesCopy = new ArrayList<>(remainingNotNullProperties);
 
 		List<ImportLine> toReturn = new ArrayList<ImportLine>();
 
 		for (ImportLineColumn column : columns.values()) {
 			MultiKey key = new MultiKey(column.getFile().getId(), column.getIndex());
 			remainingPropertiesCopy.remove(key);
+			remainingNotNullPropertiesCopy.remove(key);
 		}
 
-		// S'il n'y a plus de propriétés à chercher, on ajoute la ligne en tant que feuille.
+		// S'il n'y a plus de propriétés à cherchers, on ajoute la ligne en tant que feuille.
 		// S'il y en a encore, on va chercher dans les lignes jointes
 		if (remainingPropertiesCopy.isEmpty()) {
 			toReturn.add(this);
-		} else {
+		} else if (joinLines.isEmpty() && remainingNotNullPropertiesCopy.isEmpty()) {
+			// Si on arrive à une feuille et qu'il ne reste plus de propriété obligatoire, on la retourne.
+			toReturn.add(this);
+		} else if (!joinLines.isEmpty()) {
 			for (List<ImportLine> lines : joinLines.values()) {
 				for (ImportLine line : lines) {
-					toReturn.addAll(line.getLeafLines(remainingPropertiesCopy));
+					toReturn.addAll(line.getLeafLines(remainingPropertiesCopy, remainingNotNullPropertiesCopy));
 				}
 			}
 		}
