@@ -1,4 +1,4 @@
-package com.equinox.imports.feature;
+package com.equinox.imports.fixture;
 
 public class MyObject {
 
