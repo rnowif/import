@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<import-mapping id="myMapping">
+    <class name="com.equinox.imports.fixture.MyObject">
+        <file id="main" type="xls" worksheet="feuille1" labels="true" />
+
+        <property file-ref="main" name="stringField" column="first" type="java.lang.String" />
+        <property file-ref="main" name="integerField" column="second" type="java.lang.Integer" />
+    </class>
+</import-mapping>
